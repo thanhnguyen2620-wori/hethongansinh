@@ -20,7 +20,6 @@
       text-align: center;
       border-bottom: 1px solid #1f2937;
     }
-    /* Khung chuẩn tỉ lệ CCCD 1.586 : 1 */
     .camera-viewport {
       position: relative;
       width: 100%;
@@ -38,7 +37,6 @@
       height: 100%;
       object-fit: cover;
     }
-    /* Viền định vị thẻ */
     .card-border-box {
       position: absolute;
       top: 50%;
@@ -94,9 +92,9 @@
   </div>
 
   <div class="container py-2" style="max-width: 480px;">
-    <!-- Cấu hình đợt quà -->
+    <!-- Cấu hình đợt quà & Tên máy -->
     <div class="card bg-dark border-secondary p-2 mb-2">
-      <div class="row g-2 align-items-center">
+      <div class="row g-2 align-items-center mb-1">
         <div class="col-7">
           <select id="campaignSelect" class="form-select form-select-sm bg-secondary text-white border-0">
             <option value="DOT_01_2026">DOT_01_2026 - Quà Tết An Sinh 2026</option>
@@ -108,9 +106,14 @@
           <input type="text" id="officerName" class="form-control form-control-sm bg-secondary text-white border-0" value="Điện thoại 1">
         </div>
       </div>
+      <div class="text-end">
+        <button class="btn btn-link text-warning text-decoration-none p-0" style="font-size: 12px;" onclick="resetApiKey()">
+          🔑 Nhập / Đổi Google AI API Key
+        </button>
+      </div>
     </div>
 
-    <!-- Màn hình Camera 1.586 : 1 -->
+    <!-- Màn hình Camera chuẩn tỷ lệ thẻ 1.586 : 1 -->
     <div class="camera-viewport mb-2">
       <video id="cameraStream" playsinline autoplay muted></video>
       <div class="card-border-box">
@@ -122,19 +125,18 @@
     <!-- Nút điều khiển -->
     <div class="d-grid gap-2 mb-2">
       <button id="btnScanAI" class="btn btn-ai-scan shadow" onclick="triggerAIScan()">
-        ⚡ BẤM ĐỂ AI QUÉT CCCD NGAY
+        ⚡ BẤM ĐỂ AI QUÉT CCCD
       </button>
       
-      <!-- Chế độ tự động quét mỗi 2.5 giây -->
       <div class="form-check form-switch text-center d-flex justify-content-center gap-2 mt-1">
         <input class="form-check-input" type="checkbox" id="autoScanSwitch" onchange="toggleAutoScan()">
         <label class="form-check-label small text-secondary" for="autoScanSwitch">
-          Tự động chụp quét liên tục (mỗi 2.5s)
+          Chế độ tự động chụp quét liên tục (mỗi 2.5s)
         </label>
       </div>
     </div>
 
-    <!-- Hộp thông báo kết quả trả về tức thời -->
+    <!-- Hộp hiển thị kết quả -->
     <div id="resultBox" style="display: none;" class="card p-3 text-center border-0 shadow mb-3">
       <div id="resBadge" class="mb-2"></div>
       <h3 id="resName" class="fw-bold mb-1">--</h3>
@@ -147,13 +149,30 @@
 
   <script>
     // ==============================================================
-    // THÔNG TIN KẾT NỐI (ĐÃ TÍCH HỢP SẴN API KEY CỦA BẠN)
+    // THÔNG TIN KẾT NỐI
     // ==============================================================
-    // Giải mã API Key để vượt qua kiểm tra Push Protection của GitHub
-    const GEMINI_API_KEY = atob("QVEuQWI4Uk42TDJTTUNiZ0RTVVQtOF9CZWJ3czlRQU9lZ2ZuYWJJRjhoYjFUbF9meHhzb1E=");
-    
-    // Đường link Web App Google Apps Script của bạn
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_kWN1XsVRn5Tz3d/exec";
+
+    // Quản lý API Key an toàn trong bộ nhớ máy
+    function getStoredApiKey() {
+      let key = localStorage.getItem("GEMINI_KEY_V2");
+      if (!key) {
+        key = prompt("Vui lòng dán mã Google AI Studio API Key (bắt đầu bằng AIzaSy...):");
+        if (key) {
+          key = key.trim();
+          localStorage.setItem("GEMINI_KEY_V2", key);
+        }
+      }
+      return key;
+    }
+
+    function resetApiKey() {
+      const newKey = prompt("Dán mã API Key mới (bắt đầu bằng AIzaSy...):", localStorage.getItem("GEMINI_KEY_V2") || "");
+      if (newKey) {
+        localStorage.setItem("GEMINI_KEY_V2", newKey.trim());
+        alert("Đã lưu API Key mới thành công!");
+      }
+    }
 
     const video = document.getElementById("cameraStream");
     const canvas = document.getElementById("snapshotCanvas");
@@ -162,10 +181,8 @@
 
     window.addEventListener("DOMContentLoaded", () => {
       initCamera();
-      syncMoreCampaigns();
     });
 
-    // 1. Mở camera Full HD tự động
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -179,38 +196,10 @@
         video.srcObject = stream;
         await video.play();
       } catch (err) {
-        alert("Vui lòng cấp quyền mở Camera trên trình duyệt!");
+        alert("Vui lòng cho phép quyền Camera trên trình duyệt!");
       }
     }
 
-    // 2. Đồng bộ thêm đợt phát quà từ Google Sheets nếu có
-    function syncMoreCampaigns() {
-      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("...")) return;
-      const script = document.createElement("script");
-      const cb = "cb_sync_" + Math.floor(Math.random() * 100000);
-      
-      window[cb] = function(res) {
-        delete window[cb];
-        if (script.parentNode) script.parentNode.removeChild(script);
-        if (res && res.campaigns && res.campaigns.length > 0) {
-          const sel = document.getElementById("campaignSelect");
-          const curVal = sel.value;
-          sel.innerHTML = "";
-          res.campaigns.forEach(c => {
-            const opt = document.createElement("option");
-            opt.value = c.id;
-            opt.textContent = c.id + " - " + c.name;
-            sel.appendChild(opt);
-          });
-          if (curVal) sel.value = curVal;
-        }
-      };
-
-      script.src = `${APPS_SCRIPT_URL}?callback=${cb}`;
-      document.body.appendChild(script);
-    }
-
-    // 3. Chế độ quét tự động liên tục
     function toggleAutoScan() {
       const isChecked = document.getElementById("autoScanSwitch").checked;
       if (isChecked) {
@@ -222,7 +211,6 @@
       }
     }
 
-    // 4. Chụp khung hình và gửi đến Gemini 1.5 Flash Vision nhận diện
     async function triggerAIScan() {
       if (isProcessing) return;
       
@@ -232,10 +220,15 @@
         return;
       }
 
+      const apiKey = getStoredApiKey();
+      if (!apiKey) {
+        alert("Bạn chưa nhập API Key. Hãy bấm vào 'Nhập / Đổi Google AI API Key' ở góc trên!");
+        return;
+      }
+
       isProcessing = true;
       showStatusCard("⏳ GEMINI AI ĐANG PHÂN TÍCH...", "Đang bóc tách mã QR và số CCCD...");
 
-      // Chụp khung hình hiện tại từ camera
       canvas.width = video.videoWidth || 1280;
       canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext("2d");
@@ -244,7 +237,7 @@
       const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
 
       try {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -252,7 +245,7 @@
             contents: [{
               parts: [
                 {
-                  text: "Đây là hình ảnh thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên mặt thẻ. Bóc tách và trả về định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ chữ giải thích nào ngoài JSON."
+                  text: "Đây là thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên thẻ. Trả về đúng định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ văn bản nào ngoài JSON."
                 },
                 {
                   inline_data: {
@@ -272,13 +265,13 @@
 
         // Kiểm tra lỗi từ Google API
         if (data.error) {
-          showErrorCard("Lỗi Google API: " + data.error.message);
+          showErrorCard(`Lỗi Google (${data.error.code}): ${data.error.message}`);
           isProcessing = false;
           return;
         }
 
         if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-          showErrorCard("AI chưa phát hiện được thẻ. Đưa thẻ vào giữa khung ngắm và thử lại!");
+          showErrorCard("AI chưa phát hiện được thẻ. Hãy căn chỉnh thẻ vào giữa khung viền xanh!");
           isProcessing = false;
           return;
         }
@@ -300,7 +293,6 @@
       }
     }
 
-    // 5. Gửi số CCCD về Google Sheets đối soát
     function sendToGoogleSheets(cccd, hoTen) {
       showStatusCard("⏳ ĐANG ĐỐI SOÁT GOOGLE SHEETS...", `Số CCCD: ${cccd}`);
       
