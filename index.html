@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Quét CCCD Thông Minh - AI Studio Vision</title>
+  <title>Hệ Thống Quét CCCD Nhận Quà (AI Studio)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -13,32 +13,32 @@
       margin: 0;
       padding: 0;
     }
-    .top-header {
+    .header-bar {
       background: #111827;
       padding: 12px 16px;
       text-align: center;
       border-bottom: 1px solid #1f2937;
     }
-    /* Khung ngắm tỷ lệ chuẩn thẻ CCCD 1.586 : 1 */
-    .viewport-box {
+    /* Khung chuẩn tỉ lệ CCCD 1.586 : 1 */
+    .camera-frame-container {
       position: relative;
       width: 100%;
       max-width: 440px;
       margin: 0 auto;
       aspect-ratio: 1.5858 / 1;
       background: #000;
-      border-radius: 14px;
+      border-radius: 16px;
       overflow: hidden;
       border: 2px solid #2563eb;
-      box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+      box-shadow: 0 0 25px rgba(37, 99, 235, 0.4);
     }
-    #cameraView {
+    #cameraStream {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
-    /* Viền định vị thẻ */
-    .card-border {
+    /* Viền mô phỏng hình dáng thẻ CCCD */
+    .card-guideline {
       position: absolute;
       top: 50%;
       left: 50%;
@@ -51,7 +51,7 @@
       box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.45);
       z-index: 5;
     }
-    .qr-corner {
+    .qr-corner-box {
       position: absolute;
       top: 6px;
       right: 6px;
@@ -61,7 +61,7 @@
       border-radius: 8px;
       background: rgba(245, 158, 11, 0.2);
     }
-    .qr-corner::after {
+    .qr-corner-box::after {
       content: "MÃ QR";
       position: absolute;
       bottom: -15px;
@@ -70,19 +70,26 @@
       font-weight: bold;
       color: #f59e0b;
     }
-    .btn-action {
-      font-size: 16px;
+    .btn-ai-scan {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border: none;
+      color: white;
+      padding: 16px;
+      font-size: 17px;
       font-weight: bold;
-      padding: 14px;
       border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    }
+    .btn-ai-scan:active {
+      transform: scale(0.98);
     }
   </style>
 </head>
 <body>
 
-  <div class="top-header">
-    <div class="fw-bold text-info fs-5">QUÉT CCCD BẰNG GEMINI AI</div>
-    <small class="text-secondary">Đọc đồng thời Mã QR & Chữ số in trên thẻ</small>
+  <div class="header-bar">
+    <div class="fw-bold text-info fs-5">QUÉT CCCD - GOOGLE AI STUDIO</div>
+    <small class="text-secondary">Gemini 2.5 Flash Vision | Đồng bộ Google Sheets</small>
   </div>
 
   <div class="container py-2" style="max-width: 480px;">
@@ -91,70 +98,75 @@
       <div class="row g-2 align-items-center">
         <div class="col-7">
           <select id="campaignSelect" class="form-select form-select-sm bg-secondary text-white border-0">
-            <option value="">Đang tải đợt quà...</option>
+            <option value="">⏳ Đang nạp đợt quà...</option>
           </select>
         </div>
         <div class="col-5">
-          <input type="text" id="officerName" class="form-control form-control-sm bg-secondary text-white border-0" value="ĐT 1">
+          <input type="text" id="officerName" class="form-control form-control-sm bg-secondary text-white border-0" value="Điện thoại 1">
         </div>
       </div>
     </div>
 
     <!-- Màn hình Camera 1.586 : 1 -->
-    <div class="viewport-box mb-2">
-      <video id="cameraView" playsinline autoplay muted></video>
-      <div class="card-border">
-        <div class="qr-corner"></div>
+    <div class="camera-frame-container mb-2">
+      <video id="cameraStream" playsinline autoplay muted></video>
+      <div class="card-guideline">
+        <div class="qr-corner-box"></div>
       </div>
-      <canvas id="captureCanvas" style="display: none;"></canvas>
+      <canvas id="snapshotCanvas" style="display: none;"></canvas>
     </div>
 
-    <!-- Nút bấm quét chụp -->
+    <!-- Nút điều khiển -->
     <div class="d-grid gap-2 mb-2">
-      <button id="btnScanAI" class="btn btn-primary btn-action shadow" onclick="triggerAIScan()">
-        ⚡ BẤM ĐỂ AI QUÉT CCCD NGAY
+      <button id="btnScan" class="btn btn-ai-scan shadow" onclick="triggerAIScan()">
+        ⚡ BẤM ĐỂ AI QUÉT CCCD
       </button>
+      
+      <!-- Chế độ tự động quét mỗi 2 giây -->
       <div class="form-check form-switch text-center d-flex justify-content-center gap-2 mt-1">
         <input class="form-check-input" type="checkbox" id="autoScanSwitch" onchange="toggleAutoScan()">
-        <label class="form-check-label small text-secondary" for="autoScanSwitch">Tự động chụp quét liên tục (mỗi 2.5s)</label>
+        <label class="form-check-label small text-secondary" for="autoScanSwitch">
+          Chế độ tự động quét liên tục (mỗi 2.5s)
+        </label>
       </div>
     </div>
 
-    <!-- Kết quả đối soát -->
+    <!-- Hộp thông báo kết quả trả về tức thời -->
     <div id="resultBox" style="display: none;" class="card p-3 text-center border-0 shadow mb-3">
       <div id="resBadge" class="mb-2"></div>
       <h3 id="resName" class="fw-bold mb-1">--</h3>
       <div id="resDetail" class="small mb-3">--</div>
-      <button class="btn btn-light fw-bold py-2 w-100 shadow-sm" onclick="resumeScanner()">
-        ⏩ Quét tiếp người sau
+      <button class="btn btn-light fw-bold py-2 w-100 shadow-sm" onclick="resumeScan()">
+        ⏩ Quét tiếp người kế tiếp
       </button>
     </div>
   </div>
 
   <script>
-    // -------------------------------------------------------------
-    // 1. CẤU HÌNH LIÊN KẾT (THAY 2 THÔNG SỐ CỦA BẠN VÀO ĐÂY)
-    // -------------------------------------------------------------
-    const GEMINI_API_KEY = "DÁN_API_KEY_GOOGLE_AI_STUDIO_VAO_DAY";
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyi8Jg4o7M73O8Vv8nU3c0qC67rR5xWv6V1C1Z_ePjI6Y3Fk0Y/exec"; // Link Web App của bạn
+    // ==============================================================
+    // CẤU HÌNH THÔNG TIN KẾT NỐI (ĐIỀN CỦA BẠN VÀO ĐÂY)
+    // ==============================================================
+    const GEMINI_API_KEY = "AQ.Ab8RN6L2SMCbgDSUT-8_Bebws9QAOegfnabIF8hb1Tl_fxxsoQ";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWQHXubH4wjJZhCV3pFBK10Vhoje17EvsvCsV1s45vF0abZUvgaXXWN1XsVRn5Tz3d/exec";
 
-    const video = document.getElementById("cameraView");
-    const canvas = document.getElementById("captureCanvas");
+    const video = document.getElementById("cameraStream");
+    const canvas = document.getElementById("snapshotCanvas");
     let isProcessing = false;
-    let autoScanInterval = null;
+    let autoInterval = null;
 
     window.addEventListener("DOMContentLoaded", () => {
       loadCampaigns();
-      startCamera();
+      initCamera();
     });
 
-    // Tải đợt quà qua JSONP tránh lỗi CORS
+    // 1. Tải đợt phát quà từ Google Sheets qua JSONP
     function loadCampaigns() {
       const script = document.createElement("script");
       const cb = "cb_camp_" + Math.floor(Math.random() * 100000);
+      
       window[cb] = function(res) {
         delete window[cb];
-        document.body.removeChild(script);
+        if (script.parentNode) script.parentNode.removeChild(script);
         const sel = document.getElementById("campaignSelect");
         sel.innerHTML = "";
         if (res.campaigns && res.campaigns.length > 0) {
@@ -168,12 +180,24 @@
           sel.innerHTML = '<option value="">Không có đợt quà mở</option>';
         }
       };
+
       script.src = `${APPS_SCRIPT_URL}?callback=${cb}`;
       document.body.appendChild(script);
+
+      // Dự phòng nếu mạng quá chậm
+      setTimeout(() => {
+        const sel = document.getElementById("campaignSelect");
+        if (sel.options.length <= 1 && sel.value === "") {
+          sel.innerHTML = `
+            <option value="DOT_01_2026">DOT_01_2026 - Quà Tết An Sinh 2026</option>
+            <option value="DOT_02_2026">DOT_02_2026 - Tháng Hành động Vì người nghèo</option>
+          `;
+        }
+      }, 3000);
     }
 
-    // Mở Camera trực tiếp Full HD
-    async function startCamera() {
+    // 2. Mở camera Full HD
+    async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -186,23 +210,23 @@
         video.srcObject = stream;
         await video.play();
       } catch (err) {
-        alert("Vui lòng cấp quyền Camera trên trình duyệt!");
+        alert("Vui lòng cấp quyền mở Camera trên trình duyệt!");
       }
     }
 
-    // Bật/Tắt chế độ tự động quét mỗi 2.5 giây
+    // 3. Chế độ quét tự động liên tục
     function toggleAutoScan() {
       const isChecked = document.getElementById("autoScanSwitch").checked;
       if (isChecked) {
-        autoScanInterval = setInterval(() => {
+        autoInterval = setInterval(() => {
           if (!isProcessing) triggerAIScan();
         }, 2500);
       } else {
-        clearInterval(autoScanInterval);
+        clearInterval(autoInterval);
       }
     }
 
-    // Chụp khung hình và gửi đến Gemini Vision
+    // 4. Gửi ảnh đến Gemini 2.5 Flash Vision nhận diện
     async function triggerAIScan() {
       if (isProcessing) return;
       
@@ -213,32 +237,33 @@
       }
 
       isProcessing = true;
-      showStatus("⏳ GEMINI AI ĐANG ĐỌC THẺ...", "Trí tuệ nhân tạo đang bóc tách số CCCD & mã QR...");
+      showStatusCard("⏳ GEMINI AI ĐANG PHÂN TÍCH...", "Đang đọc mã QR và số in trên thẻ CCCD...");
 
-      // Chụp ảnh từ luồng video
+      // Chụp khung hình từ Video
       canvas.width = video.videoWidth || 1280;
       canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Lấy dữ liệu ảnh dạng Base64
-      const base64Image = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
+      // Chuyển sang Base64
+      const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
 
       try {
-        // Gửi trực tiếp đến Gemini 2.5 Flash API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        // Gọi trực tiếp đến Gemini 2.5 Flash API
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{
               parts: [
                 {
-                  text: "Đây là hình ảnh thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. trên mặt thẻ. Trả về định dạng JSON duy nhất: {\"cccd\": \"12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Không giải thích gì thêm."
+                  text: "Đây là hình ảnh thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên thẻ. Trả về định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ văn bản giải thích nào khác."
                 },
                 {
                   inline_data: {
                     mime_type: "image/jpeg",
-                    data: base64Image
+                    data: base64Data
                   }
                 }
               ]
@@ -250,43 +275,43 @@
         });
 
         const data = await response.json();
-        const rawJsonText = data.candidates[0].content.parts[0].text;
-        const parsed = JSON.parse(rawJsonText);
+        const jsonText = data.candidates[0].content.parts[0].text;
+        const result = JSON.parse(jsonText);
 
-        if (parsed && parsed.cccd && parsed.cccd.replace(/\D/g, '').length === 12) {
-          const cleanCCCD = parsed.cccd.replace(/\D/g, '');
-          sendToGoogleSheets(cleanCCCD, parsed.hoTen || "");
+        if (result && result.cccd && result.cccd.replace(/\D/g, '').length === 12) {
+          const cleanCCCD = result.cccd.replace(/\D/g, '');
+          sendToGoogleSheets(cleanCCCD, result.hoTen || "");
         } else {
-          showError("AI chưa thấy rõ thẻ CCCD. Vui lòng đặt thẻ thẳng góc và bấm quét lại!");
+          showErrorCard("AI chưa nhận diện rõ thẻ. Hãy căn chỉnh thẻ vào giữa khung ngắm!");
           isProcessing = false;
         }
 
       } catch (err) {
-        showError("Lỗi phân tích AI: " + err.message);
+        showErrorCard("Lỗi phân tích AI: " + err.message);
         isProcessing = false;
       }
     }
 
-    // Gửi số CCCD đã bóc tách về Google Sheets đối soát
+    // 5. Gửi số CCCD về Google Sheets đối soát
     function sendToGoogleSheets(cccd, hoTen) {
-      showStatus("⏳ ĐANG ĐỐI SOÁT GOOGLE SHEETS...", `Số CCCD: ${cccd}`);
+      showStatusCard("⏳ ĐANG ĐỐI SOÁT GOOGLE SHEETS...", `Số CCCD: ${cccd}`);
       
       const campaignId = document.getElementById("campaignSelect").value;
       const officer = document.getElementById("officerName").value;
 
       const script = document.createElement("script");
-      const cb = "cb_checkin_" + Math.floor(Math.random() * 100000);
+      const cb = "cb_check_" + Math.floor(Math.random() * 100000);
 
       window[cb] = function(res) {
         delete window[cb];
-        document.body.removeChild(script);
-        renderResult(res);
+        if (script.parentNode) script.parentNode.removeChild(script);
+        renderFinalResult(res);
       };
 
       const params = new URLSearchParams({
-        action: "scan",
+        action: "checkin",
         cccd: cccd,
-        hoTenAI: hoTen,
+        hoTen: hoTen,
         campaignId: campaignId,
         officer: officer,
         callback: cb
@@ -296,7 +321,7 @@
       document.body.appendChild(script);
     }
 
-    function showStatus(title, sub) {
+    function showStatusCard(title, sub) {
       const b = document.getElementById("resultBox");
       b.style.display = "block";
       b.className = "card p-3 text-center border-0 bg-secondary text-white mb-3";
@@ -305,7 +330,7 @@
       document.getElementById("resDetail").textContent = sub;
     }
 
-    function showError(msg) {
+    function showErrorCard(msg) {
       const b = document.getElementById("resultBox");
       b.style.display = "block";
       b.className = "card p-3 text-center border-0 bg-dark text-white mb-3";
@@ -314,7 +339,7 @@
       document.getElementById("resDetail").textContent = msg;
     }
 
-    function renderResult(res) {
+    function renderFinalResult(res) {
       const b = document.getElementById("resultBox");
       b.style.display = "block";
 
@@ -346,11 +371,11 @@
           <em>${res.message}</em>
         `;
       } else {
-        showError(res.message);
+        showErrorCard(res.message);
       }
     }
 
-    function resumeScanner() {
+    function resumeScan() {
       document.getElementById("resultBox").style.display = "none";
       isProcessing = false;
     }
