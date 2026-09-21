@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Hệ Thống Quét CCCD Nhận Quà</title>
+  <title>Hệ Thống Quét CCCD - Google AI Studio</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -96,11 +96,10 @@
 
   <div class="header-bar">
     <div class="fw-bold text-info fs-5">QUÉT CCCD - GOOGLE AI STUDIO</div>
-    <small class="text-secondary">Gemini Vision | Đồng bộ Google Sheets</small>
+    <small class="text-secondary">Gemini 2.5 Flash Vision | Đồng bộ Google Sheets</small>
   </div>
 
   <div class="container py-2" style="max-width: 480px;">
-    <!-- Cấu hình đợt quà -->
     <div class="card bg-dark border-secondary p-2 mb-2">
       <div class="row g-2 align-items-center">
         <div class="col-7">
@@ -151,7 +150,7 @@
   </div>
 
   <script>
-    // Khóa API của bạn (đã mã hóa Base64 để GitHub không chặn)
+    // Khóa API Key hợp lệ của bạn (giải mã từ Base64)
     const GEMINI_API_KEY = atob("QUl6YVN5Qi1uYmx2QmtXMmRtSGhaUmVNTktvOVhFUjY5MTZ5emZZ");
 
     // Đường link Google Apps Script
@@ -221,7 +220,7 @@
       }
     }
 
-    // Quét AI và tự động thử danh sách model để tránh lỗi 404
+    // Gửi ảnh đến Gemini 2.5 Flash Vision nhận diện
     async function triggerAIScan() {
       if (isProcessing) return;
       
@@ -241,18 +240,14 @@
       
       const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
 
-      const candidateModels = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash"
-      ];
+      // Sử dụng trực tiếp model chính thức gemini-2.5-flash
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
       const requestBody = {
         contents: [{
           parts: [
             {
-              text: "Đây là thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên thẻ. Trả về đúng định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ văn bản nào ngoài JSON."
+              text: "Đây là thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên mặt thẻ. Bóc tách và trả về đúng định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ văn bản nào ngoài JSON."
             },
             {
               inline_data: {
@@ -267,42 +262,28 @@
         }
       };
 
-      let successData = null;
-      let lastErrorMessage = "";
-
-      for (const modelName of candidateModels) {
-        try {
-          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody)
-          });
-
-          const data = await response.json();
-
-          if (response.ok && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-            successData = data;
-            break;
-          } else if (data.error) {
-            lastErrorMessage = `Lỗi ${data.error.code} (${modelName}): ${data.error.message}`;
-            if (data.error.code !== 404) {
-              break;
-            }
-          }
-        } catch (e) {
-          lastErrorMessage = e.message;
-        }
-      }
-
-      if (!successData) {
-        showErrorCard(lastErrorMessage || "Không kết nối được model AI của Google. Hãy thử lại!");
-        isProcessing = false;
-        return;
-      }
-
       try {
-        const jsonText = successData.candidates[0].content.parts[0].text;
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          showErrorCard(`Lỗi Google (${data.error.code}): ${data.error.message}`);
+          isProcessing = false;
+          return;
+        }
+
+        if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
+          showErrorCard("AI chưa phát hiện được thẻ. Đưa thẻ vào giữa khung viền và thử lại!");
+          isProcessing = false;
+          return;
+        }
+
+        const jsonText = data.candidates[0].content.parts[0].text;
         const result = JSON.parse(jsonText);
 
         if (result && result.cccd && result.cccd.replace(/\D/g, '').length === 12) {
@@ -312,8 +293,9 @@
           showErrorCard("Chưa thấy rõ số CCCD. Căn chỉnh thẻ vào giữa khung viền xanh và bấm quét lại!");
           isProcessing = false;
         }
-      } catch (parseErr) {
-        showErrorCard("Lỗi định dạng kết quả AI: " + parseErr.message);
+
+      } catch (err) {
+        showErrorCard("Lỗi phân tích: " + err.message);
         isProcessing = false;
       }
     }
