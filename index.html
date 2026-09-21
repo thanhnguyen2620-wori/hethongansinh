@@ -2,29 +2,27 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Quét Thẻ CCCD Điểm Danh Nhận Quà</title>
+  <title>Quét Tự Động CCCD</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Thư viện quét mã vạch & QR chuẩn công nghiệp -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     body {
-      background-color: #0b1120;
-      color: #f8fafc;
+      background-color: #030712;
+      color: #f9fafb;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       margin: 0;
       padding: 0;
-      user-select: none;
+      overflow-x: hidden;
     }
-    .top-header {
-      background: #1e293b;
-      padding: 12px 16px;
+    .header-bar {
+      background: #111827;
+      padding: 12px 14px;
       text-align: center;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid #1f2937;
     }
-    /* Khung chuẩn tỷ lệ vật lý CCCD: 85.6mm x 53.98mm ~ 1.5858 : 1 */
-    .cccd-frame-wrapper {
+    /* Khung quét chuẩn tỷ lệ CCCD 1.586 : 1 */
+    .scanner-viewport {
       position: relative;
       width: 100%;
       max-width: 440px;
@@ -33,274 +31,295 @@
       background: #000;
       border-radius: 14px;
       overflow: hidden;
-      border: 2px solid #3b82f6;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+      border: 2px solid #2563eb;
+      box-shadow: 0 0 25px rgba(37, 99, 235, 0.3);
     }
-    #reader {
-      width: 100% !important;
-      height: 100% !important;
-      border: none !important;
+    #cameraStream {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
-    #reader video {
-      object-fit: cover !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-    /* Khung ngắm mô phỏng viền thẻ CCCD */
-    .card-border-overlay {
+    /* Khung ngắm chuẩn thẻ */
+    .overlay-frame {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       width: 92%;
       height: 90%;
-      border: 2px dashed rgba(56, 189, 248, 0.9);
+      border: 2px solid #38bdf8;
       border-radius: 10px;
       pointer-events: none;
-      box-shadow: 0 0 0 5000px rgba(0, 0, 0, 0.45);
-      z-index: 4;
+      box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
+      z-index: 5;
     }
-    /* Góc định vị mã QR ở phía trên bên phải của thẻ */
-    .qr-target-box {
+    /* Vùng nhận diện QR góc trên bên phải */
+    .qr-corner {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      width: 68px;
-      height: 68px;
-      border: 2px solid #fbbf24;
+      top: 6px;
+      right: 6px;
+      width: 65px;
+      height: 65px;
+      border: 2px dashed #f59e0b;
       border-radius: 8px;
-      background: rgba(251, 191, 36, 0.2);
+      background: rgba(245, 158, 11, 0.15);
     }
-    .qr-target-box::after {
+    .qr-corner::after {
       content: "MÃ QR";
       position: absolute;
-      bottom: -18px;
+      bottom: -16px;
       right: 0;
-      font-size: 10px;
-      font-weight: 800;
-      color: #fbbf24;
-    }
-    .btn-action {
-      font-size: 16px;
+      font-size: 9px;
       font-weight: bold;
-      padding: 14px;
-      border-radius: 12px;
+      color: #f59e0b;
     }
-    /* Vùng trạng thái phản hồi lớn */
-    .status-card {
+    /* Tia quét laser chạy liên tục như ngân hàng */
+    .laser-line {
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+      box-shadow: 0 0 8px #38bdf8;
+      animation: scanLaser 1.8s infinite ease-in-out;
+    }
+    @keyframes scanLaser {
+      0% { top: 5%; opacity: 0.2; }
+      50% { top: 95%; opacity: 1; }
+      100% { top: 5%; opacity: 0.2; }
+    }
+    .status-alert {
       border-radius: 14px;
-      animation: fadeIn 0.3s ease;
+      animation: popUp 0.25s ease-out;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes popUp {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
     }
   </style>
 </head>
 <body>
 
-  <div class="top-header">
-    <div class="fw-bold text-info fs-5">🎁 ĐIỂM DANH TRAO QUÀ CCCD</div>
-    <small class="text-secondary">Khung tỷ lệ chuẩn 1.586 : 1 | Full HD 1080p</small>
+  <div class="header-bar">
+    <div class="fw-bold text-info fs-5">QUÉT TỰ ĐỘNG CCCD</div>
+    <small class="text-secondary">Nhận diện tức thì như app ngân hàng</small>
   </div>
 
   <div class="container py-2" style="max-width: 480px;">
-    <!-- Cấu hình đợt quà -->
+    <!-- Đợt quà & Tên máy -->
     <div class="card bg-dark border-secondary p-2 mb-2">
       <div class="row g-2 align-items-center">
         <div class="col-7">
           <select id="campaignSelect" class="form-select form-select-sm bg-secondary text-white border-0">
-            <option value="">Đang nạp đợt quà...</option>
+            <option value="">⏳ Đang nạp đợt quà...</option>
           </select>
         </div>
         <div class="col-5">
-          <input type="text" id="officerName" class="form-control form-control-sm bg-secondary text-white border-0" value="Điện thoại 1">
+          <input type="text" id="officerName" class="form-control form-control-sm bg-secondary text-white border-0" value="ĐT 1">
         </div>
       </div>
     </div>
 
-    <!-- Màn hình quét đúng tỷ lệ CCCD (1.586 : 1) -->
-    <div class="cccd-frame-wrapper mb-2">
-      <div id="reader"></div>
-      <div class="card-border-overlay">
-        <div class="qr-target-box"></div>
+    <!-- Màn hình Camera tự động -->
+    <div class="scanner-viewport mb-2">
+      <video id="cameraStream" playsinline autoplay muted></video>
+      <div class="overlay-frame">
+        <div class="laser-line"></div>
+        <div class="qr-corner"></div>
       </div>
+      <canvas id="hiddenCanvas" style="display: none;"></canvas>
     </div>
 
-    <!-- Nút điều khiển -->
-    <div class="d-grid gap-2 mb-2">
-      <button id="btnCamera" class="btn btn-primary btn-action shadow" onclick="toggleCamera()">
-        📹 BẬT CAMERA QUÉT
-      </button>
-
-      <!-- Nút kích hoạt chụp quét chủ động nếu máy không tự bắt -->
-      <button id="btnManualCapture" class="btn btn-outline-info btn-sm py-2 fw-bold" style="display: none;" onclick="forceScanNow()">
-        ⚡ BẤM ĐỂ QUÉT NGAY LẬP TỨC
-      </button>
+    <div id="camMessage" class="text-center small text-info fw-bold mb-2">
+      Đang khởi động camera tự động...
     </div>
 
-    <div id="scanFeedback" class="text-center text-secondary small mb-2">
-      Đặt thẻ vừa vặn trong khung viền xanh, mã QR vào ô vuông vàng
-    </div>
-
-    <!-- Hộp hiển thị kết quả kiểm tra tức thì -->
-    <div id="resultBox" style="display: none;" class="card p-3 text-center border-0 shadow status-card mb-3">
+    <!-- Hộp thông báo kết quả tức thời -->
+    <div id="resultBox" style="display: none;" class="card p-3 text-center border-0 shadow status-alert mb-3">
       <div id="resBadge" class="mb-2"></div>
       <h3 id="resName" class="fw-bold mb-1">--</h3>
       <div id="resDetail" class="small mb-3">--</div>
       <button class="btn btn-light fw-bold py-2 w-100 shadow-sm" onclick="resumeScanner()">
-        ⏩ Quét tiếp người sau
+        ⏩ Quét tiếp người kế tiếp
       </button>
     </div>
   </div>
 
   <script>
-    // DÁN ĐÚNG ĐƯỜNG LINK APPS SCRIPT CỦA BẠN VÀO ĐÂY:
-    const API_URL = "https://script.google.com/macros/s/AKfycbyi8Jg4o7M73O8Vv8nU3c0qC67rR5xWv6V1C1Z_ePjI6Y3Fk0Y/exec";
+    // DÁN ĐÚNG ĐƯỜNG LINK GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY:
+    const API_URL = "https://script.google.com/macros/s/AKfycbyWQHXubH4wjJZhCV3pFBK10Vhoje17EvsvCsV1s45vF0abZUvgaXXWN1XsVRn5Tz3d/exec";
 
-    let html5QrScanner = null;
-    let isRunning = false;
-    let isBusy = false;
+    const video = document.getElementById("cameraStream");
+    const canvas = document.getElementById("hiddenCanvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    
+    let isLocked = false;
+    let barcodeDetector = null;
 
-    window.onload = () => {
-      loadCampaigns();
-    };
+    // 1. Tự động chạy khi mở web
+    window.addEventListener("DOMContentLoaded", () => {
+      loadCampaignsJSONP();
+      initNativeDetector();
+      startAutoCamera();
+    });
 
-    function loadCampaigns() {
-      fetch(API_URL)
-        .then(r => r.json())
-        .then(res => {
-          const sel = document.getElementById("campaignSelect");
-          sel.innerHTML = "";
-          if (res.campaigns && res.campaigns.length > 0) {
-            res.campaigns.forEach(c => {
-              const opt = document.createElement("option");
-              opt.value = c.id;
-              opt.textContent = c.id + " - " + c.name;
-              sel.appendChild(opt);
-            });
-          } else {
-            sel.innerHTML = '<option value="">Không có đợt quà đang mở</option>';
-          }
-        })
-        .catch(err => {
-          console.warn("Không tải được danh sách đợt quà: ", err);
-        });
-    }
-
-    function toggleCamera() {
-      const btn = document.getElementById("btnCamera");
-      const btnManual = document.getElementById("btnManualCapture");
-
-      if (isRunning) {
-        stopCamera();
-        btn.textContent = "📹 BẬT CAMERA QUÉT";
-        btn.className = "btn btn-primary btn-action shadow";
-        btnManual.style.display = "none";
-        return;
-      }
-
-      if (!html5QrScanner) {
-        html5QrScanner = new Html5Qrcode("reader");
-      }
-
-      // Thiết lập thông số chuẩn: Full HD 1920x1080, tỷ lệ 1.586 : 1
-      const config = {
-        fps: 25, // Tần số 25 khung hình/giây giúp bắt cực nhạy
-        aspectRatio: 1.5858,
-        videoConstraints: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920, min: 1024 },
-          height: { ideal: 1080, min: 646 }
-        },
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true // Tận dụng nhân phần cứng NPU của iPhone/Android
+    // Tải đợt quà bằng JSONP (Khắc phục 100% lỗi CORS)
+    function loadCampaignsJSONP() {
+      const script = document.createElement("script");
+      const callbackName = "cb_campaigns_" + Math.floor(Math.random() * 100000);
+      
+      window[callbackName] = function(res) {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        
+        const sel = document.getElementById("campaignSelect");
+        sel.innerHTML = "";
+        if (res.campaigns && res.campaigns.length > 0) {
+          res.campaigns.forEach(c => {
+            const opt = document.createElement("option");
+            opt.value = c.id;
+            opt.textContent = c.id + " - " + c.name;
+            sel.appendChild(opt);
+          });
+        } else {
+          sel.innerHTML = '<option value="">Không có đợt quà mở</option>';
         }
       };
 
-      html5QrScanner.start(
-        { facingMode: "environment" },
-        config,
-        onScanSuccess
-      ).then(() => {
-        isRunning = true;
-        btn.textContent = "⏹ TẮT CAMERA";
-        btn.className = "btn btn-danger btn-action shadow";
-        btnManual.style.display = "block";
-        document.getElementById("scanFeedback").textContent = "Camera đang hoạt động: Đưa góc QR vào ô vuông vàng";
-      }).catch(err => {
-        alert("Lỗi camera: " + err);
-      });
+      script.src = `${API_URL}?callback=${callbackName}`;
+      script.onerror = function() {
+        document.getElementById("campaignSelect").innerHTML = '<option value="">Lỗi kết nối đợt quà!</option>';
+      };
+      document.body.appendChild(script);
     }
 
-    function stopCamera() {
-      if (html5QrScanner && isRunning) {
-        html5QrScanner.stop().then(() => {
-          isRunning = false;
-        });
+    // Khởi tạo bộ giải mã phần cứng siêu tốc của điện thoại
+    function initNativeDetector() {
+      if ('BarcodeDetector' in window) {
+        try {
+          barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        } catch (e) {
+          barcodeDetector = null;
+        }
       }
     }
 
-    // Nhận diện mã thành công
-    function onScanSuccess(decodedText) {
-      if (isBusy) return;
-      isBusy = true;
+    // 2. Khởi động Camera Full HD tự động ngay lập tức
+    async function startAutoCamera() {
+      const msg = document.getElementById("camMessage");
+      
+      const constraints = {
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          focusMode: { ideal: "continuous" }
+        },
+        audio: false
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        await video.play();
+        msg.textContent = "Hướng mã QR CCCD vào ô vuông màu vàng";
+        
+        // Bắt đầu vòng lặp quét siêu tốc
+        requestAnimationFrame(tickScan);
+      } catch (err) {
+        msg.innerHTML = `<span class="text-danger fw-bold">Chưa cấp quyền Camera. Hãy bấm Cho phép trên trình duyệt!</span>`;
+      }
+    }
+
+    // 3. Vòng lặp giải mã video liên tục (30 FPS)
+    async function tickScan() {
+      if (!isLocked && video.readyState === video.HAVE_ENOUGH_DATA) {
+        
+        // Cách 1: Ưu tiên bộ giải mã phần cứng BarcodeDetector (Tốc độ như app ngân hàng)
+        if (barcodeDetector) {
+          try {
+            const barcodes = await barcodeDetector.detect(video);
+            if (barcodes.length > 0 && barcodes[0].rawValue) {
+              handleDetectedCode(barcodes[0].rawValue);
+              return;
+            }
+          } catch (e) {}
+        }
+
+        // Cách 2: Dự phòng dùng jsQR phân tích từng khung hình
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height, {
+          inversionAttempts: "dontInvert"
+        });
+
+        if (code && code.data) {
+          handleDetectedCode(code.data);
+          return;
+        }
+      }
+
+      requestAnimationFrame(tickScan);
+    }
+
+    // Xử lý khi bắt được mã
+    function handleDetectedCode(qrRaw) {
+      isLocked = true;
+      if (navigator.vibrate) navigator.vibrate(80);
+      playBeep();
 
       const campaignId = document.getElementById("campaignSelect").value;
       const officer = document.getElementById("officerName").value;
 
       if (!campaignId) {
-        alert("Vui lòng chọn đợt phát quà trước!");
-        isBusy = false;
+        alert("Vui lòng chọn đợt quà trước!");
+        isLocked = false;
+        requestAnimationFrame(tickScan);
         return;
       }
 
-      // Rung phản hồi báo nhận diện
-      if (navigator.vibrate) navigator.vibrate(100);
+      showWait();
 
-      showWaitingBox();
+      // Gửi đối soát bằng JSONP để tránh triệt để lỗi mạng CORS
+      const script = document.createElement("script");
+      const callbackName = "cb_scan_" + Math.floor(Math.random() * 100000);
 
-      // Gửi dữ liệu về Google Apps Script
-      fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" }, // Dùng text/plain để tránh lỗi CORS Preflight
-        body: JSON.stringify({
-          qrRaw: decodedText,
-          campaignId: campaignId,
-          officer: officer
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        renderResult(data);
-      })
-      .catch(err => {
-        showErrorBox("Lỗi gửi dữ liệu lên Google Sheets: " + err);
+      window[callbackName] = function(res) {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        renderResult(res);
+      };
+
+      const params = new URLSearchParams({
+        action: "scan",
+        qrRaw: qrRaw,
+        campaignId: campaignId,
+        officer: officer,
+        callback: callbackName
       });
+
+      script.src = `${API_URL}?${params.toString()}`;
+      script.onerror = function() {
+        showError("Lỗi kết nối máy chủ Google Sheets!");
+      };
+      document.body.appendChild(script);
     }
 
-    // Nút cưỡng bức quét dành cho trường hợp máy chậm
-    function forceScanNow() {
-      // Đổi lại điểm lấy nét
-      document.getElementById("scanFeedback").textContent = "Đang rà quét lại toàn bộ khung hình...";
-      setTimeout(() => {
-        document.getElementById("scanFeedback").textContent = "Đặt thẻ vừa vặn trong khung viền xanh";
-      }, 1500);
-    }
-
-    function showWaitingBox() {
+    function showWait() {
       const b = document.getElementById("resultBox");
       b.style.display = "block";
-      b.className = "card p-3 text-center border-0 bg-secondary text-white status-card mb-3";
-      document.getElementById("resBadge").innerHTML = `<span class="badge bg-light text-dark fs-6">⏳ ĐANG ĐỐI SOÁT DỮ LIỆU...</span>`;
+      b.className = "card p-3 text-center border-0 bg-secondary text-white status-alert mb-3";
+      document.getElementById("resBadge").innerHTML = `<span class="badge bg-light text-dark fs-6">⏳ ĐANG ĐỐI SOÁT...</span>`;
       document.getElementById("resName").textContent = "Đang kiểm tra";
-      document.getElementById("resDetail").textContent = "Vui lòng chờ trong giây lát...";
+      document.getElementById("resDetail").textContent = "Vui lòng chờ giây lát...";
     }
 
-    function showErrorBox(msg) {
+    function showError(msg) {
       const b = document.getElementById("resultBox");
       b.style.display = "block";
-      b.className = "card p-3 text-center border-0 bg-dark text-white status-card mb-3";
+      b.className = "card p-3 text-center border-0 bg-dark text-white status-alert mb-3";
       document.getElementById("resBadge").innerHTML = `<span class="badge bg-warning text-dark fs-6">LỖI XỬ LÝ</span>`;
       document.getElementById("resName").textContent = "Thông báo";
       document.getElementById("resDetail").textContent = msg;
@@ -312,8 +331,8 @@
 
       if (res.status === 'SUCCESS') {
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        b.className = "card p-3 text-center border-0 bg-success text-white status-card mb-3";
-        document.getElementById("resBadge").innerHTML = `<span class="badge bg-light text-success fs-6">✅ HỢP LỆ - ĐÃ NHẬN QUÀ</span>`;
+        b.className = "card p-3 text-center border-0 bg-success text-white status-alert mb-3";
+        document.getElementById("resBadge").innerHTML = `<span class="badge bg-light text-success fs-6">✅ HỢP LỆ - ĐÃ PHÁT QUÀ</span>`;
         document.getElementById("resName").textContent = res.resident.hoTen;
         document.getElementById("resDetail").innerHTML = `
           CCCD: <strong>${res.resident.soCCCD}</strong><br>
@@ -322,7 +341,7 @@
         `;
       } else if (res.status === 'ALREADY_CLAIMED') {
         if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-        b.className = "card p-3 text-center border-0 bg-danger text-white status-card mb-3";
+        b.className = "card p-3 text-center border-0 bg-danger text-white status-alert mb-3";
         document.getElementById("resBadge").innerHTML = `<span class="badge bg-warning text-dark fs-6">⚠️ ĐÃ NHẬN QUÀ RỒI!</span>`;
         document.getElementById("resName").textContent = res.resident.hoTen;
         document.getElementById("resDetail").innerHTML = `
@@ -330,7 +349,7 @@
           CCCD: ${res.resident.soCCCD} | Khu phố: ${res.resident.khuPho}
         `;
       } else if (res.status === 'NOT_FOUND') {
-        b.className = "card p-3 text-center border-0 bg-warning text-dark status-card mb-3";
+        b.className = "card p-3 text-center border-0 bg-warning text-dark status-alert mb-3";
         document.getElementById("resBadge").innerHTML = `<span class="badge bg-danger text-white fs-6">❌ NGOÀI DANH SÁCH</span>`;
         document.getElementById("resName").textContent = res.hoTen || "Không rõ danh tính";
         document.getElementById("resDetail").innerHTML = `
@@ -338,13 +357,30 @@
           <em>${res.message}</em>
         `;
       } else {
-        showErrorBox(res.message);
+        showError(res.message);
       }
     }
 
     function resumeScanner() {
       document.getElementById("resultBox").style.display = "none";
-      isBusy = false;
+      isLocked = false;
+      requestAnimationFrame(tickScan);
+    }
+
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 1050;
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } catch (e) {}
     }
   </script>
 </body>
