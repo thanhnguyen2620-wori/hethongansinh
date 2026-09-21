@@ -142,12 +142,28 @@
     </div>
   </div>
 
-  <script>
+ <script>
     // ==============================================================
-    // CẤU HÌNH THÔNG TIN KẾT NỐI (ĐIỀN CỦA BẠN VÀO ĐÂY)
+    // 1. CẤU HÌNH THÔNG TIN KẾT NỐI
     // ==============================================================
-    const GEMINI_API_KEY = "AQ.Ab8RN6L2SMCbgDSUT-8_Bebws9QAOegfnabIF8hb1Tl_fxxsoQ";
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWQHXubH4wjJZhCV3pFBK10Vhoje17EvsvCsV1s45vF0abZUvgaXXWN1XsVRn5Tz3d/exec";
+    // Lấy API Key từ bộ nhớ máy hoặc hỏi 1 lần duy nhất để tránh bị GitHub chặn bí mật
+    let GEMINI_API_KEY = localStorage.getItem("GEMINI_KEY") || "";
+    if (!GEMINI_API_KEY) {
+      GEMINI_API_KEY = prompt("Vui lòng dán mã Google AI Studio API Key (AIzaSy...) của bạn:") || "";
+      if (GEMINI_API_KEY) {
+        localStorage.setItem("GEMINI_KEY", GEMINI_API_KEY.trim());
+      }
+    }
+
+    // DÁN ĐÚNG ĐƯỜNG LINK WEB APP CỦA BẠN VÀO ĐÂY (Giữ nguyên chữ APPS_SCRIPT_URL):
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_kWN1XsVRn5Tz3d/exec"; 
+
+    // Danh mục các đợt quà mặc định (Đảm bảo luôn hiện ngay lập tức 100%)
+    const DEFAULT_CAMPAIGNS = [
+      { id: "DOT_01_2026", name: "Quà Tết An Sinh 2026" },
+      { id: "DOT_02_2026", name: "Tháng Hành động Vì người nghèo" },
+      { id: "DOT_03_2026", name: "Hỗ trợ đột xuất hộ khó khăn" }
+    ];
 
     const video = document.getElementById("cameraStream");
     const canvas = document.getElementById("snapshotCanvas");
@@ -155,48 +171,54 @@
     let autoInterval = null;
 
     window.addEventListener("DOMContentLoaded", () => {
-      loadCampaigns();
+      // 1. Nạp danh sách đợt quà lên màn hình ngay tức khắc
+      initCampaignDropdown();
+      // 2. Mở camera
       initCamera();
+      // 3. Cập nhật thêm danh sách mới từ Google Sheets nếu có
+      syncCampaignsFromSheet();
     });
 
-    // 1. Tải đợt phát quà từ Google Sheets qua JSONP
-    function loadCampaigns() {
+    // Nạp đợt quà lập tức không cần chờ mạng
+    function initCampaignDropdown() {
+      const sel = document.getElementById("campaignSelect");
+      sel.innerHTML = "";
+      DEFAULT_CAMPAIGNS.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = c.id + " - " + c.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    // Đồng bộ thêm các đợt quà mới tạo từ Google Sheets
+    function syncCampaignsFromSheet() {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("...")) return;
       const script = document.createElement("script");
-      const cb = "cb_camp_" + Math.floor(Math.random() * 100000);
+      const cb = "cb_sync_" + Math.floor(Math.random() * 100000);
       
       window[cb] = function(res) {
         delete window[cb];
         if (script.parentNode) script.parentNode.removeChild(script);
-        const sel = document.getElementById("campaignSelect");
-        sel.innerHTML = "";
-        if (res.campaigns && res.campaigns.length > 0) {
+        if (res && res.campaigns && res.campaigns.length > 0) {
+          const sel = document.getElementById("campaignSelect");
+          const currentVal = sel.value;
+          sel.innerHTML = "";
           res.campaigns.forEach(c => {
             const opt = document.createElement("option");
             opt.value = c.id;
             opt.textContent = c.id + " - " + c.name;
             sel.appendChild(opt);
           });
-        } else {
-          sel.innerHTML = '<option value="">Không có đợt quà mở</option>';
+          if (currentVal) sel.value = currentVal;
         }
       };
 
       script.src = `${APPS_SCRIPT_URL}?callback=${cb}`;
       document.body.appendChild(script);
-
-      // Dự phòng nếu mạng quá chậm
-      setTimeout(() => {
-        const sel = document.getElementById("campaignSelect");
-        if (sel.options.length <= 1 && sel.value === "") {
-          sel.innerHTML = `
-            <option value="DOT_01_2026">DOT_01_2026 - Quà Tết An Sinh 2026</option>
-            <option value="DOT_02_2026">DOT_02_2026 - Tháng Hành động Vì người nghèo</option>
-          `;
-        }
-      }, 3000);
     }
 
-    // 2. Mở camera Full HD
+    // Mở Camera Full HD
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -210,11 +232,11 @@
         video.srcObject = stream;
         await video.play();
       } catch (err) {
-        alert("Vui lòng cấp quyền mở Camera trên trình duyệt!");
+        alert("Vui lòng cấp quyền Camera trên trình duyệt!");
       }
     }
 
-    // 3. Chế độ quét tự động liên tục
+    // Chế độ tự động quét mỗi 2.5 giây
     function toggleAutoScan() {
       const isChecked = document.getElementById("autoScanSwitch").checked;
       if (isChecked) {
@@ -226,7 +248,7 @@
       }
     }
 
-    // 4. Gửi ảnh đến Gemini 2.5 Flash Vision nhận diện
+    // Chụp khung hình và gửi đến Gemini Vision
     async function triggerAIScan() {
       if (isProcessing) return;
       
@@ -236,20 +258,23 @@
         return;
       }
 
+      if (!GEMINI_API_KEY) {
+        GEMINI_API_KEY = prompt("Vui lòng dán mã Google AI Studio API Key:") || "";
+        if (GEMINI_API_KEY) localStorage.setItem("GEMINI_KEY", GEMINI_API_KEY.trim());
+        else return;
+      }
+
       isProcessing = true;
       showStatusCard("⏳ GEMINI AI ĐANG PHÂN TÍCH...", "Đang đọc mã QR và số in trên thẻ CCCD...");
 
-      // Chụp khung hình từ Video
       canvas.width = video.videoWidth || 1280;
       canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Chuyển sang Base64
       const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
 
       try {
-        // Gọi trực tiếp đến Gemini 2.5 Flash API
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
         const response = await fetch(apiUrl, {
           method: "POST",
@@ -258,7 +283,7 @@
             contents: [{
               parts: [
                 {
-                  text: "Đây là hình ảnh thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR ở góc trên bên phải hoặc đọc dòng Số/No. in trên thẻ. Trả về định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên nếu có\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}. Tuyệt đối không thêm bất kỳ văn bản giải thích nào khác."
+                  text: "Đây là thẻ Căn cước công dân (CCCD) Việt Nam. Hãy đọc mã QR góc phải hoặc dòng Số/No. trên mặt thẻ. Trả về đúng định dạng JSON duy nhất: {\"cccd\": \"chuỗi 12 chữ số\", \"hoTen\": \"Họ và tên\"}. Nếu không thấy thẻ hoặc không đọc được, trả về {\"cccd\": null}."
                 },
                 {
                   inline_data: {
@@ -282,7 +307,7 @@
           const cleanCCCD = result.cccd.replace(/\D/g, '');
           sendToGoogleSheets(cleanCCCD, result.hoTen || "");
         } else {
-          showErrorCard("AI chưa nhận diện rõ thẻ. Hãy căn chỉnh thẻ vào giữa khung ngắm!");
+          showErrorCard("AI chưa thấy rõ thẻ CCCD. Đặt thẻ vào giữa khung viền xanh và bấm quét lại!");
           isProcessing = false;
         }
 
@@ -292,7 +317,7 @@
       }
     }
 
-    // 5. Gửi số CCCD về Google Sheets đối soát
+    // Gửi về Google Sheets đối soát
     function sendToGoogleSheets(cccd, hoTen) {
       showStatusCard("⏳ ĐANG ĐỐI SOÁT GOOGLE SHEETS...", `Số CCCD: ${cccd}`);
       
